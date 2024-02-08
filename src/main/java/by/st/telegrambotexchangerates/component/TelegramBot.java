@@ -6,6 +6,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Bean;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
@@ -26,7 +27,9 @@ public class TelegramBot extends TelegramLongPollingBot {
     private final BotConfig botConfig;
 
     private final BankApiService bankApiService;
-    private RestTemplate restTemplate;
+
+    private final RestTemplate restTemplate;
+
 
     @Override
     public String getBotToken() {
@@ -49,13 +52,16 @@ public class TelegramBot extends TelegramLongPollingBot {
             if (messageText.equals("/start")) {
                 startCommandReceived(chatId, update.getMessage().getChat().getFirstName());
                 showBankOptions(chatId);
+            } else if (messageText.equals("Нацбанк РБ")){
+                sendMessage(chatId,getCurrentRate("usd"));
             } else {
                 sendHelpMessage(chatId);
             }
         } else if (update.hasCallbackQuery()) {
             String callbackData = update.getCallbackQuery().getData();
             chatId = update.getMessage().getChatId();
-            if (callbackData.startsWith("bank:")) {
+            if (callbackData.equals("Нацбанк РБ")) {
+                sendMessage(chatId,getCurrentRate("usd"));
                 String selectedBank = callbackData.substring(5);
                 handleBankSelection(chatId, selectedBank);
             }
@@ -86,16 +92,18 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     public String getCurrentRate(String currencyCode) {
         var answer = "";
-
         String jsonString = restTemplate.getForObject("https://api.nbrb.by/exrates/rates/USD?parammode=2", String.class);
+        System.out.println(jsonString);
         if ((jsonString == null) || (jsonString.isEmpty())) {
             return "На данных момент сервис не доступен";
         } else {
+            ObjectMapper objectMapper = new ObjectMapper();
             try {
-                JsonNode rootNode = new ObjectMapper().readTree(jsonString);
-                JsonNode valuteNode = rootNode.get("Cur_OfficialRate");
-                var value = valuteNode.get(currencyCode).get("Value").doubleValue();
-                answer = "Официальный курс " + currencyCode + "  на сегодня: " + value + " USD";
+                JsonNode rootNode = objectMapper.readTree(jsonString);
+                JsonNode rateNode = rootNode.get("Cur_OfficialRate");
+                String rateString = rateNode.asText();
+                answer = "Официальный курс " + currencyCode + "  на сегодня: " + rateString + " USD";
+                /*answer = jsonString;*/
             } catch (JsonProcessingException e) {
                 throw new RuntimeException(e);
             }
