@@ -51,7 +51,7 @@ public class ExchangeRatesServiceNBRB {
                             .getBody())
                     .stream()
                     .filter(currencyRateNBRB -> currencyRateNBRB
-                            .getCurName()
+                            .getCurAbbreviation()
                             .equals(curName))
                     .findFirst();
         } else {

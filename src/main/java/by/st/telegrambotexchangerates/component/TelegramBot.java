@@ -2,40 +2,74 @@ package by.st.telegrambotexchangerates.component;
 
 import by.st.telegrambotexchangerates.configuration.BotConfig;
 import by.st.telegrambotexchangerates.controller.NBRBController;
+import by.st.telegrambotexchangerates.model.Guest;
+import by.st.telegrambotexchangerates.model.enums.StateChat;
+import by.st.telegrambotexchangerates.model.response.RateResponse;
 import by.st.telegrambotexchangerates.service.BankApiService;
-import by.st.telegrambotexchangerates.service.ExchangeRatesServiceNBRB;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import by.st.telegrambotexchangerates.service.KeyboardService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+
+import static by.st.telegrambotexchangerates.model.enums.StateChat.SELECT_BANK;
+import static by.st.telegrambotexchangerates.model.enums.StateChat.SELECT_CURRENCY;
+
 
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class TelegramBot extends TelegramLongPollingBot {
+    private static final String NATIONAL_BANK = "Нацбанк РБ";
+    private static final String ALFA_BANK = "Альфа-Банк";
+    private static final String BELARUS_BANK = "Беларусбанк";
+    private static final String START = "/start";
+    private static final String USD = "USD";
+    private static final String RUB = "RUB";
+    private static final String EUR = "EUR";
+    private static final String CNY = "CNY";
+    private static final String ANOTHER_BANK = "Выбрать другой банк";
+    private static final String ANOTHER_CURRENCY = "Выбрать другую валюту";
+    private static final String CURRENT_EXCHANGE_RATE = "Курс на текущий день";
+    private static final String SELECTED_EXCHANGE_RATE = "Курс на выбранный день";
+    private static final String SELECTED_STATISTICS = "Собрать статистику";
+
+
+
+
+    private final KeyboardService keyboardService;
+
+    private final MessageService messageService;
 
     private final BotConfig botConfig;
 
     private final BankApiService bankApiService;
 
-    private final RestTemplate restTemplate;
-
-    private final ExchangeRatesServiceNBRB exchangeRatesServiceNBRB;
-
     private final NBRBController nbrbController;
 
+        private final Map<Long, StateChat> chatStates = new HashMap<>();
+        private final Map<Long, String> lastSelectedBank = new HashMap<>();
+        public final Map<Long,String> lastSelectedCurrency = new HashMap<>();
+
+    private static Guest getGuest(Update update) {
+        return Guest.builder()
+                .id(update.getMessage().getChat().getId())
+                .userName(update.getMessage().getChat().getUserName())
+                .firstName(update.getMessage().getChat().getFirstName())
+                .lastName(update.getMessage().getChat().getLastName())
+                .build();
+    }
 
     @Override
     public String getBotToken() {
@@ -53,43 +87,75 @@ public class TelegramBot extends TelegramLongPollingBot {
         if (update.hasMessage() && update.getMessage().hasText()) {
             String messageText = update.getMessage().getText();
             chatId = update.getMessage().getChatId();
-            String userName = update.getMessage().getChat().getFirstName();
-            if (messageText.equals("/start")) {
-                startCommandReceived(chatId, userName);
-                showBankOptions(chatId);
-                log.info("Пользователь " + userName + ", выбирает банк");
-            } else if (messageText.equals("Нацбанк РБ")){
-                List<String> rates = nbrbController.getRateByCurName("Доллар США");
-                sendMessage(chatId,getCurrentRate("usd"));
-                sendMessage(chatId,exchangeRatesServiceNBRB.optionalCurrencyRateNBRBCurrentDay("Доллар США")
-                        .toString());
-                for(String rate: rates){
-                    sendMessage(chatId,rate);
-                }
-            } else {
-                sendHelpMessage(chatId);
-            }
-        } else if (update.hasCallbackQuery()) {
-            String callbackData = update.getCallbackQuery().getData();
-            chatId = update.getMessage().getChatId();
-            if (callbackData.equals("Нацбанк РБ")) {
-                sendMessage(chatId,getCurrentRate("usd"));
-                String selectedBank = callbackData.substring(5);
+            Guest user = getGuest(update);
+            StateChat stateChat = chatStates.getOrDefault(chatId, StateChat.SELECT_BANK);
+            switch (stateChat) {
+                case SELECT_BANK:
+                    if (messageText.equals(START)) {
+                        chatStates.put(chatId, StateChat.SELECT_BANK);
+                        messageService.startCommandReceived(chatId,user,getBotUsername());
+                        showBankOptions(chatId);
+                        log.info("Пользователь: " + user + ", запустил бот!" );
+                    } else if(messageText.equals(ALFA_BANK) || messageText.equals(BELARUS_BANK) || messageText.equals(NATIONAL_BANK)){
+                        /*handleBankSelection(chatId, messageText);*/
+                        chatStates.put(chatId, SELECT_CURRENCY);
+                        lastSelectedBank.put(chatId,messageText);
+                        showCurrencyOptions(chatId,messageText);
+                        log.info("Пользователь: " + user + ", выбирает валюту!" );
+                    } else {
+                        messageService.sendHelpMessage(chatId);
+                    }
+                    break;
+
+                case SELECT_CURRENCY:
+                    switch (messageText) {
+                        case USD, RUB, EUR, CNY -> {
+                            /*handleCurrencySelection(chatId, messageText);*/
+                            chatStates.put(chatId, StateChat.SELECT_OPTION);
+                            lastSelectedCurrency.put(chatId,messageText);
+                            showOptionOptions(chatId, lastSelectedBank.get(chatId), messageText);
+                            log.info("Пользователь: " + user + ", выбирает опции валют!");
+                            /*showOptionOptions(chatId);*/
+                        }
+                        case ANOTHER_BANK -> {
+                            showBankOptions(chatId);
+                            chatStates.put(chatId, SELECT_BANK);
+                            log.info("Пользователь: " + user + ", меняет выбранный банк!");
+                        }
+
+                        default -> messageService.sendHelpMessage(chatId);
+                    }
+                    break;
+
+                case SELECT_OPTION:
+                    /*handleOptionSelection(chatId, messageText);*/
+                    if(messageText.equals(CURRENT_EXCHANGE_RATE) || messageText.equals(SELECTED_EXCHANGE_RATE) ||
+                messageText.equals(SELECTED_STATISTICS)){
+                        messageService.sendMessage(chatId,messageText);
+                        messageService.sendExchangeRateCurrentDayMessage(chatId,
+                                nbrbController.getRateByCurName(lastSelectedCurrency.get(chatId),
+                                        lastSelectedBank.get(chatId)));
+                        log.info("Пользователь: " + user + ", получил ответ!");
+
+                    } else if (messageText.equals(ANOTHER_BANK)) {
+                        chatStates.put(chatId, SELECT_BANK);
+                        showBankOptions(chatId);
+                    } else {
+                        chatStates.put(chatId,StateChat.SELECT_CURRENCY);
+                        showCurrencyOptions(chatId,lastSelectedBank.get(chatId));
+                    }
+                    break;
             }
         }
     }
 
+
     private void showBankOptions(long chatId) {
         List<String> banks = bankApiService.getAllBanks();
-        KeyboardRow row = new KeyboardRow();
-        for (String bank : banks) {
-            row.add(bank);
-        }
-        ReplyKeyboardMarkup markup = new ReplyKeyboardMarkup();
-        markup.setKeyboard(Collections.singletonList(row));
+        ReplyKeyboardMarkup markup = keyboardService.getBanksKeyboard(banks);
         SendMessage message = SendMessage.builder()
                 .chatId(String.valueOf(chatId))
-                .text("Выберите банк:")
+                .text("Чтобы воспользоваться функциями бота сперва выбери банк из меню снизу.")
                 .replyMarkup(markup)
                 .build();
         try {
@@ -99,36 +165,13 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    public String getCurrentRate(String currencyCode) {
-        var answer = "";
-        String jsonString = restTemplate.getForObject("https://api.nbrb.by/exrates/rates/USD?parammode=2", String.class);
-        System.out.println(jsonString);
-        if ((jsonString == null) || (jsonString.isEmpty())) {
-            return "На данных момент сервис не доступен";
-        } else {
-            ObjectMapper objectMapper = new ObjectMapper();
-            try {
-                JsonNode rootNode = objectMapper.readTree(jsonString);
-                JsonNode rateNode = rootNode.get("Cur_OfficialRate");
-                String rateString = rateNode.asText();
-                answer = "Официальный курс " + currencyCode + "  на сегодня: " + rateString + " USD";
-                answer = jsonString;
-            } catch (JsonProcessingException e) {
-                throw new RuntimeException(e);
-            }
-            return answer;
-        }
-    }
-
-    private void startCommandReceived(long chatId, String firstName) {
-        String answer = "Привет  " + firstName + ", рады видеть вас.";
-        sendMessage(chatId, answer);
-    }
-
-    private void sendMessage(long chatId, String textToSend) {
-        SendMessage message = new SendMessage();
-        message.setChatId(String.valueOf(chatId));
-        message.setText(textToSend);
+    private void showCurrencyOptions(long chatId, String bankName) {
+        ReplyKeyboardMarkup markup = keyboardService.getCurrencyKeyboard();
+        SendMessage message = SendMessage.builder()
+                .chatId(String.valueOf(chatId))
+                .text("Ты выбрал " + bankName + ". Теперь выбери валюту из списка ниже.")
+                .replyMarkup(markup)
+                .build();
         try {
             execute(message);
         } catch (TelegramApiException e) {
@@ -136,8 +179,18 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    private void sendHelpMessage(long chatId) {
-        String helpMessage = "Извините, я не понимаю эту команду. Вы можете использовать команду /start, чтобы начать.";
-        sendMessage(chatId, helpMessage);
+    private void showOptionOptions(long chatId, String bankName, String currency) {
+        ReplyKeyboardMarkup markup = keyboardService.getOptionsKeyboard();
+        SendMessage message = SendMessage.builder()
+                .chatId(String.valueOf(chatId))
+                .text("Выбранная валюта " + currency + ". Выбранный банк: " + bankName)
+                .replyMarkup(markup)
+                .build();
+        try {
+            execute(message);
+        } catch (TelegramApiException e) {
+            System.err.println("Не удалось отправить сообщение: " + e.getMessage());
+        }
     }
+
 }
