@@ -7,6 +7,8 @@ import org.springframework.context.annotation.Configuration;
 @Data
 @Configuration
 public class BankApiProperties {
-    @Value("${bank.api.url}")
-    private String url;
+    @Value("${bank.api.url.nationalBank}")
+    private String urlNationalBank;
+    @Value("${bank.api.url.alfaBank}")
+    private String urlAlfaBank;
 }

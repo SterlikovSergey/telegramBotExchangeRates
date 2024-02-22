@@ -1,16 +1,20 @@
 package by.st.telegrambotexchangerates.service;
 
+import by.st.telegrambotexchangerates.constants.BotConstants;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
 @Service
 public class KeyboardService {
-    public ReplyKeyboardMarkup getBanksKeyboard(List<String> banks) {
+    public ReplyKeyboardMarkup getBanksKeyboard() {
+        List<String> banks = Arrays.asList(BotConstants.ALFA_BANK, BotConstants.BELARUS_BANK,
+                BotConstants.NATIONAL_BANK);
         List<KeyboardRow> keyboardRows = new ArrayList<>();
         Iterator<String> bankIterator = banks.iterator();
         if (bankIterator.hasNext()) {
@@ -32,12 +36,12 @@ public class KeyboardService {
 
     public ReplyKeyboardMarkup getCurrencyKeyboard() {
         KeyboardRow currencyRow = new KeyboardRow();
-        currencyRow.add("USD");
-        currencyRow.add("RUB");
-        currencyRow.add("EUR");
-        currencyRow.add("CNY");
+        currencyRow.add(BotConstants.USD);
+        currencyRow.add(BotConstants.RUB);
+        currencyRow.add(BotConstants.EUR);
+        currencyRow.add(BotConstants.CNY);
         KeyboardRow anotherBankRow = new KeyboardRow();
-        anotherBankRow.add("Выбрать другой банк");
+        anotherBankRow.add(BotConstants.ANOTHER_BANK);
         List<KeyboardRow> keyboard = new ArrayList<>();
         keyboard.add(currencyRow);
         keyboard.add(anotherBankRow);
@@ -48,13 +52,13 @@ public class KeyboardService {
 
     public ReplyKeyboardMarkup getOptionsKeyboard() {
         KeyboardRow currencyRow = new KeyboardRow();
-        currencyRow.add("Курс на текущий день");
-        currencyRow.add("Курс на выбранный день /doesn't work, under development");
+        currencyRow.add(BotConstants.CURRENT_EXCHANGE_RATE);
+        currencyRow.add(BotConstants.SELECTED_EXCHANGE_RATE);
         KeyboardRow statistics = new KeyboardRow();
-        statistics.add("Собрать статистику/doesn't work, under development");
+        statistics.add(BotConstants.SELECTED_STATISTICS);
         KeyboardRow anotherRow = new KeyboardRow();
-        anotherRow.add("Выбрать другой банк");
-        anotherRow.add("Выбрать другую валюту");
+        anotherRow.add(BotConstants.ANOTHER_BANK);
+        anotherRow.add(BotConstants.ANOTHER_CURRENCY);
         List<KeyboardRow> keyboard = new ArrayList<>();
         keyboard.add(currencyRow);
         keyboard.add(statistics);

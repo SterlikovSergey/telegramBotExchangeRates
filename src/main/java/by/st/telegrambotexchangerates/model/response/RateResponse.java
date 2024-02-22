@@ -13,6 +13,7 @@ public class RateResponse {
     private String bankName;
     private String currencyName;
     private String curAbbreviation;
-    private String rate;
+    private int quantityUnits;
+    private Double rate;
     private String date;
 }

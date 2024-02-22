@@ -13,7 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Component
-public class MessageService {
+public class MessageSender {
 
     private TelegramLongPollingBot bot;
     @Autowired
@@ -48,6 +48,13 @@ public class MessageService {
             sendMessage(chatId,string);
         }
 
+    }
+
+    public void sendThanksToUserMessage(long chatId, Guest guest){
+        String thanksMessage = "Спасибо за тестирование бота" +
+                ". Бот разработан в учебных целях и специально для вас " + guest.getFirstName() +
+                ". Вопросы и предложения направляйте по https://t.me/St_Sergey_Minsky";
+        sendMessage(chatId,thanksMessage);
     }
 
     public void sendHelpMessage(long chatId) {

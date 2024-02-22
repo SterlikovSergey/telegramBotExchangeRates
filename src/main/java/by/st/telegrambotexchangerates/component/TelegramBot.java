@@ -1,11 +1,13 @@
 package by.st.telegrambotexchangerates.component;
 
 import by.st.telegrambotexchangerates.configuration.BotConfig;
+import by.st.telegrambotexchangerates.constants.BotConstants;
 import by.st.telegrambotexchangerates.controller.NBRBController;
 import by.st.telegrambotexchangerates.model.Guest;
 import by.st.telegrambotexchangerates.model.enums.StateChat;
 import by.st.telegrambotexchangerates.model.response.RateResponse;
-import by.st.telegrambotexchangerates.service.BankApiService;
+import by.st.telegrambotexchangerates.provider.BankApiProvider;
+import by.st.telegrambotexchangerates.service.BankApi;
 import by.st.telegrambotexchangerates.service.KeyboardService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,14 +15,10 @@ import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import static by.st.telegrambotexchangerates.model.enums.StateChat.SELECT_BANK;
@@ -31,36 +29,15 @@ import static by.st.telegrambotexchangerates.model.enums.StateChat.SELECT_CURREN
 @RequiredArgsConstructor
 @Slf4j
 public class TelegramBot extends TelegramLongPollingBot {
-    private static final String NATIONAL_BANK = "Нацбанк РБ";
-    private static final String ALFA_BANK = "Альфа-Банк";
-    private static final String BELARUS_BANK = "Беларусбанк";
-    private static final String START = "/start";
-    private static final String USD = "USD";
-    private static final String RUB = "RUB";
-    private static final String EUR = "EUR";
-    private static final String CNY = "CNY";
-    private static final String ANOTHER_BANK = "Выбрать другой банк";
-    private static final String ANOTHER_CURRENCY = "Выбрать другую валюту";
-    private static final String CURRENT_EXCHANGE_RATE = "Курс на текущий день";
-    private static final String SELECTED_EXCHANGE_RATE = "Курс на выбранный день";
-    private static final String SELECTED_STATISTICS = "Собрать статистику";
-
-
-
 
     private final KeyboardService keyboardService;
-
-    private final MessageService messageService;
-
+    private final MessageSender messageSender;
     private final BotConfig botConfig;
-
-    private final BankApiService bankApiService;
-
     private final NBRBController nbrbController;
-
-        private final Map<Long, StateChat> chatStates = new HashMap<>();
-        private final Map<Long, String> lastSelectedBank = new HashMap<>();
-        public final Map<Long,String> lastSelectedCurrency = new HashMap<>();
+    private final BankApiProvider bankApiProvider;
+    private final Map<Long, StateChat> chatStates = new HashMap<>();
+    private final Map<Long, String> lastSelectedBank = new HashMap<>();
+    public final Map<Long, String> lastSelectedCurrency = new HashMap<>();
 
     private static Guest getGuest(Update update) {
         return Guest.builder()
@@ -87,72 +64,70 @@ public class TelegramBot extends TelegramLongPollingBot {
         if (update.hasMessage() && update.getMessage().hasText()) {
             String messageText = update.getMessage().getText();
             chatId = update.getMessage().getChatId();
-            Guest user = getGuest(update);
+            Guest guest = getGuest(update);
             StateChat stateChat = chatStates.getOrDefault(chatId, StateChat.SELECT_BANK);
             switch (stateChat) {
                 case SELECT_BANK:
-                    if (messageText.equals(START)) {
+                    if (messageText.equals(BotConstants.START)) {
                         chatStates.put(chatId, StateChat.SELECT_BANK);
-                        messageService.startCommandReceived(chatId,user,getBotUsername());
+                        messageSender.startCommandReceived(chatId, guest, getBotUsername());
                         showBankOptions(chatId);
-                        log.info("Пользователь: " + user + ", запустил бот!" );
-                    } else if(messageText.equals(ALFA_BANK) || messageText.equals(BELARUS_BANK) || messageText.equals(NATIONAL_BANK)){
-                        /*handleBankSelection(chatId, messageText);*/
+                        log.info("Пользователь: " + guest + ", запустил бот!");
+                    } else if (messageText.equals(BotConstants.ALFA_BANK) ||
+                            messageText.equals(BotConstants.BELARUS_BANK) ||
+                            messageText.equals(BotConstants.NATIONAL_BANK)) {
                         chatStates.put(chatId, SELECT_CURRENCY);
-                        lastSelectedBank.put(chatId,messageText);
-                        showCurrencyOptions(chatId,messageText);
-                        log.info("Пользователь: " + user + ", выбирает валюту!" );
+                        lastSelectedBank.put(chatId, messageText);
+                        showCurrencyOptions(chatId, messageText);
+                        log.info("Пользователь: " + guest + ", выбирает валюту!");
                     } else {
-                        messageService.sendHelpMessage(chatId);
+                        messageSender.sendHelpMessage(chatId);
                     }
                     break;
-
                 case SELECT_CURRENCY:
                     switch (messageText) {
-                        case USD, RUB, EUR, CNY -> {
-                            /*handleCurrencySelection(chatId, messageText);*/
+                        case BotConstants.USD, BotConstants.RUB, BotConstants.EUR, BotConstants.CNY -> {
                             chatStates.put(chatId, StateChat.SELECT_OPTION);
-                            lastSelectedCurrency.put(chatId,messageText);
+                            lastSelectedCurrency.put(chatId, messageText);
                             showOptionOptions(chatId, lastSelectedBank.get(chatId), messageText);
-                            log.info("Пользователь: " + user + ", выбирает опции валют!");
-                            /*showOptionOptions(chatId);*/
+                            log.info("Пользователь: " + guest + ", выбирает опции валют!");
                         }
-                        case ANOTHER_BANK -> {
+                        case BotConstants.ANOTHER_BANK -> {
                             showBankOptions(chatId);
                             chatStates.put(chatId, SELECT_BANK);
-                            log.info("Пользователь: " + user + ", меняет выбранный банк!");
+                            log.info("Пользователь: " + guest + ", меняет выбранный банк!");
                         }
-
-                        default -> messageService.sendHelpMessage(chatId);
+                        default -> messageSender.sendHelpMessage(chatId);
                     }
                     break;
-
                 case SELECT_OPTION:
-                    /*handleOptionSelection(chatId, messageText);*/
-                    if(messageText.equals(CURRENT_EXCHANGE_RATE) || messageText.equals(SELECTED_EXCHANGE_RATE) ||
-                messageText.equals(SELECTED_STATISTICS)){
-                        messageService.sendMessage(chatId,messageText);
-                        messageService.sendExchangeRateCurrentDayMessage(chatId,
-                                nbrbController.getRateByCurName(lastSelectedCurrency.get(chatId),
-                                        lastSelectedBank.get(chatId)));
-                        log.info("Пользователь: " + user + ", получил ответ!");
-
-                    } else if (messageText.equals(ANOTHER_BANK)) {
+                    if (messageText.equals(BotConstants.CURRENT_EXCHANGE_RATE)
+                            || messageText.equals(BotConstants.SELECTED_EXCHANGE_RATE) ||
+                            messageText.equals(BotConstants.SELECTED_STATISTICS)) {
+                        messageSender.sendMessage(chatId, messageText);
+                        BankApi bankApi = bankApiProvider.getBankApi(lastSelectedBank.get(chatId));
+                        RateResponse response = nbrbController.getRateByCurName(
+                                lastSelectedCurrency.get(chatId),
+                                lastSelectedBank.get(chatId),
+                                bankApi);
+                        log.info("Получен ответ api банка в виде: " + response.toString());
+                        messageSender.sendExchangeRateCurrentDayMessage(chatId, response);
+                        messageSender.sendThanksToUserMessage(chatId, guest);
+                        log.info("Пользователь: " + guest + ", получил ответ!");
+                    } else if (messageText.equals(BotConstants.ANOTHER_BANK)) {
                         chatStates.put(chatId, SELECT_BANK);
                         showBankOptions(chatId);
                     } else {
-                        chatStates.put(chatId,StateChat.SELECT_CURRENCY);
-                        showCurrencyOptions(chatId,lastSelectedBank.get(chatId));
+                        chatStates.put(chatId, StateChat.SELECT_CURRENCY);
+                        showCurrencyOptions(chatId, lastSelectedBank.get(chatId));
                     }
                     break;
             }
         }
     }
 
-
     private void showBankOptions(long chatId) {
-        List<String> banks = bankApiService.getAllBanks();
-        ReplyKeyboardMarkup markup = keyboardService.getBanksKeyboard(banks);
+        ReplyKeyboardMarkup markup = keyboardService.getBanksKeyboard();
         SendMessage message = SendMessage.builder()
                 .chatId(String.valueOf(chatId))
                 .text("Чтобы воспользоваться функциями бота сперва выбери банк из меню снизу.")
