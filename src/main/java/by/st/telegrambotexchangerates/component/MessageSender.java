@@ -42,7 +42,7 @@ public class MessageSender {
     public void sendExchangeRateCurrentDayMessage(long chatId,RateResponse response){
         List<String> strings = new ArrayList<>();
         strings.add(response.getBankName() + " - " + response.getCurrencyName() + " на " + response.getDate());
-        strings.add("Курс продажи - " + response.getRate());
+        strings.add("Курс продажи - " + response.getRateSale());
         strings.add("Выбранная валюта: " + response.getCurAbbreviation() + ". Выбранный банк: " + response.getBankName());
         for (String string: strings){
             sendMessage(chatId,string);

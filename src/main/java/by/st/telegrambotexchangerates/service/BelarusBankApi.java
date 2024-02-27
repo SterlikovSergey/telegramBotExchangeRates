@@ -2,6 +2,7 @@ package by.st.telegrambotexchangerates.service;
 
 import by.st.telegrambotexchangerates.configuration.BankApiProperties;
 import by.st.telegrambotexchangerates.model.CurrencyRate;
+import by.st.telegrambotexchangerates.model.CurrencyRateBelarusBank;
 import by.st.telegrambotexchangerates.model.CurrencyRateNBRB;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,46 +20,41 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class BelarusBankApi implements BankApi{
+public class BelarusBankApi implements BankApi {
     private final RestTemplate restTemplate;
     private final BankApiProperties bankApiProperties;
 
-    public List<CurrencyRateNBRB> getExchangeRates() {
-        ResponseEntity<List<CurrencyRateNBRB>> response = restTemplate.exchange(
-                bankApiProperties.getUrlNationalBank(),
-                HttpMethod.GET,
-                null,
-                new ParameterizedTypeReference<List<CurrencyRateNBRB>>() {
-                }
-        );
-        if (response.getStatusCode() == HttpStatus.OK) {
-            return response.getBody();
-        } else {
-            throw new RuntimeException("Failed to get exchange rates from the API");
-        }
-    }
-
-    public Optional<CurrencyRateNBRB> optionalCurrencyRateNBRBCurrentDay(String curName) {
-        ResponseEntity<List<CurrencyRateNBRB>> response = restTemplate.exchange(
-                bankApiProperties.getUrlNationalBank(),
-                HttpMethod.GET,
-                null,
-                new ParameterizedTypeReference<List<CurrencyRateNBRB>>() {
-                }
-        );
-        if (response.getStatusCode() == HttpStatus.OK) {
-            return Objects.requireNonNull(response.getBody())
-                    .stream()
-                    .filter(currencyRateNBRB -> currencyRateNBRB.getCurAbbreviation().equals(curName))
-                    .findFirst();
-        } else {
-            throw new RuntimeException("Failed to get exchange rates from the API");
-        }
-    }
-
     @Override
     public Optional<CurrencyRate> getCurrencyRate(String curName) {
-        return Optional.empty();
+        ResponseEntity<List<CurrencyRateBelarusBank>> response = restTemplate.exchange(
+                bankApiProperties.getUrlBelarusBank(),
+                HttpMethod.GET,
+                null,
+                new ParameterizedTypeReference<List<CurrencyRateBelarusBank>>() {
+                }
+        );
+        if (response.getStatusCode() == HttpStatus.OK) {
+            /*return response.getBody();*/
+            return null;
+        } else {
+            throw new RuntimeException("Failed to get exchange rates from the API");
+        }
+    }
+
+    public CurrencyRateBelarusBank getAllRates() {
+        ResponseEntity<List<CurrencyRateBelarusBank>> response = restTemplate.exchange(
+                bankApiProperties.getUrlBelarusBank(),
+                HttpMethod.GET,
+                null,
+                new ParameterizedTypeReference<List<CurrencyRateBelarusBank>>() {
+                }
+        );
+        if (response.getStatusCode() == HttpStatus.OK) {
+            return Objects.requireNonNull(response.getBody()).get(0);
+        } else {
+            throw new RuntimeException("Failed to get exchange rates from the API");
+        }
     }
 }
+
 

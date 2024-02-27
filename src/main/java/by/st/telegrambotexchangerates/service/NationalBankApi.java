@@ -2,6 +2,7 @@ package by.st.telegrambotexchangerates.service;
 
 import by.st.telegrambotexchangerates.configuration.BankApiProperties;
 import by.st.telegrambotexchangerates.model.CurrencyRate;
+import by.st.telegrambotexchangerates.model.CurrencyRateBelarusBank;
 import by.st.telegrambotexchangerates.model.CurrencyRateNBRB;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.ParameterizedTypeReference;
@@ -39,5 +40,10 @@ public class NationalBankApi implements BankApi {
         } else {
             throw new RuntimeException("Failed to get exchange rates from the API");
         }
+    }
+
+    @Override
+    public CurrencyRateBelarusBank getAllRates() {
+        return null;
     }
 }

@@ -39,7 +39,7 @@ public class RateAlfaBank implements CurrencyRate{
     }
 
     @Override
-    public double getCurOfficialRate() {
+    public double getCurOfficialRateSale() {
         return rate;
     }
 
@@ -58,5 +58,10 @@ public class RateAlfaBank implements CurrencyRate{
     @Override
     public String getCurName() {
         return name;
+    }
+
+    @Override
+    public double getCurOfficialRateBuy() {
+        return 0;
     }
 }

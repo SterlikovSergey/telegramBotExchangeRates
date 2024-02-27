@@ -14,6 +14,7 @@ public class RateResponse {
     private String currencyName;
     private String curAbbreviation;
     private int quantityUnits;
-    private Double rate;
+    private Double rateSale;
+    private Double rateBuy;
     private String date;
 }

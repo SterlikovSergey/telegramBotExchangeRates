@@ -1,10 +1,7 @@
 package by.st.telegrambotexchangerates.service;
 
 import by.st.telegrambotexchangerates.configuration.BankApiProperties;
-import by.st.telegrambotexchangerates.model.CurrencyRate;
-import by.st.telegrambotexchangerates.model.CurrencyRateAlfaBank;
-import by.st.telegrambotexchangerates.model.CurrencyRateNBRB;
-import by.st.telegrambotexchangerates.model.RateAlfaBank;
+import by.st.telegrambotexchangerates.model.*;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
@@ -20,13 +17,15 @@ import org.springframework.web.client.RestTemplate;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+
 @Service
 @RequiredArgsConstructor
 @Data
 @Slf4j
-public class AlfaBankApi implements BankApi{
+public class AlfaBankApi implements BankApi {
     private final RestTemplate restTemplate;
     private final BankApiProperties bankApiProperties;
+
     @Override
     public Optional<CurrencyRate> getCurrencyRate(String curName) {
         ResponseEntity<CurrencyRateAlfaBank> response = restTemplate.exchange(
@@ -49,5 +48,10 @@ public class AlfaBankApi implements BankApi{
         } else {
             throw new RuntimeException("Failed to get exchange rates from the API");
         }
+    }
+
+    @Override
+    public CurrencyRateBelarusBank getAllRates() {
+        return null;
     }
 }

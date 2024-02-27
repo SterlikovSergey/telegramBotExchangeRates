@@ -39,7 +39,7 @@ public class CurrencyRateNBRB implements CurrencyRate{
     }
 
     @Override
-    public double getCurOfficialRate() {
+    public double getCurOfficialRateSale() {
         return curOfficialRate;
     }
 
@@ -58,4 +58,8 @@ public class CurrencyRateNBRB implements CurrencyRate{
         return curName;
     }
 
+    @Override
+    public double getCurOfficialRateBuy() {
+        return 0;
+    }
 }
