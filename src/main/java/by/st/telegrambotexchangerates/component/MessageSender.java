@@ -2,6 +2,7 @@ package by.st.telegrambotexchangerates.component;
 
 import by.st.telegrambotexchangerates.model.Guest;
 import by.st.telegrambotexchangerates.model.response.RateResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
@@ -13,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Component
+@Slf4j
 public class MessageSender {
 
     private TelegramLongPollingBot bot;
@@ -35,13 +37,14 @@ public class MessageSender {
         try {
             bot.execute(message);
         } catch (TelegramApiException e) {
-            System.err.println("Не удалось отправить сообщение: " + e.getMessage());
+            log.info("Не удалось отправить сообщение: " + e.getMessage());
         }
     }
 
     public void sendExchangeRateCurrentDayMessage(long chatId,RateResponse response){
         List<String> strings = new ArrayList<>();
         strings.add(response.getBankName() + " - " + response.getCurrencyName() + " на " + response.getDate());
+        strings.add("Курс покупки - " + response.getRateBuy());
         strings.add("Курс продажи - " + response.getRateSale());
         strings.add("Выбранная валюта: " + response.getCurAbbreviation() + ". Выбранный банк: " + response.getBankName());
         for (String string: strings){

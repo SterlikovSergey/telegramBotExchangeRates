@@ -5,9 +5,11 @@ import by.st.telegrambotexchangerates.constants.BotConstants;
 import by.st.telegrambotexchangerates.controller.NBRBController;
 import by.st.telegrambotexchangerates.model.Guest;
 import by.st.telegrambotexchangerates.model.enums.StateChat;
+import by.st.telegrambotexchangerates.model.enums.StateResponse;
 import by.st.telegrambotexchangerates.model.response.RateResponse;
 import by.st.telegrambotexchangerates.provider.BankApiProvider;
 import by.st.telegrambotexchangerates.service.BankApi;
+import by.st.telegrambotexchangerates.service.BelarusBankApi;
 import by.st.telegrambotexchangerates.service.KeyboardService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +22,9 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import static by.st.telegrambotexchangerates.model.enums.StateChat.SELECT_BANK;
 import static by.st.telegrambotexchangerates.model.enums.StateChat.SELECT_CURRENCY;
@@ -30,14 +35,16 @@ import static by.st.telegrambotexchangerates.model.enums.StateChat.SELECT_CURREN
 @Slf4j
 public class TelegramBot extends TelegramLongPollingBot {
 
+    public final Map<Long, String> lastSelectedCurrency = new HashMap<>();
     private final KeyboardService keyboardService;
     private final MessageSender messageSender;
     private final BotConfig botConfig;
     private final NBRBController nbrbController;
     private final BankApiProvider bankApiProvider;
     private final Map<Long, StateChat> chatStates = new HashMap<>();
+    private final Map<Long, StateResponse> stateResponse = new HashMap<>();
     private final Map<Long, String> lastSelectedBank = new HashMap<>();
-    public final Map<Long, String> lastSelectedCurrency = new HashMap<>();
+    private ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
 
     private static Guest getGuest(Update update) {
         return Guest.builder()
@@ -104,16 +111,52 @@ public class TelegramBot extends TelegramLongPollingBot {
                     if (messageText.equals(BotConstants.CURRENT_EXCHANGE_RATE)
                             || messageText.equals(BotConstants.SELECTED_EXCHANGE_RATE) ||
                             messageText.equals(BotConstants.SELECTED_STATISTICS)) {
+
+                        stateResponse.put(chatId, StateResponse.WAITING_FOR_RESPONSE);
+
+                        if (executorService.isShutdown()) {
+                            executorService = Executors.newSingleThreadScheduledExecutor();
+                        }
+                        long startTime = System.currentTimeMillis();
+
+                        executorService.scheduleAtFixedRate(() -> {
+                            if (System.currentTimeMillis() - startTime >= 31_000 &&
+                                    stateResponse.get(chatId) == StateResponse.WAITING_FOR_RESPONSE) {
+                                messageSender.sendMessage(chatId, "Сервис " + lastSelectedBank.get(chatId) +
+                                        " временно не доступен. Выберите другой банк!");
+                                executorService.shutdown();
+                                chatStates.put(chatId, SELECT_BANK);
+                            } else if (stateResponse.get(chatId) == StateResponse.RESPONSE_RECEIVED ||
+                                    stateResponse.get(chatId) == StateResponse.RESET) {
+                                executorService.shutdown();
+                            } else {
+                                messageSender.sendMessage(chatId, "Пожалуйста, подождите, ваш запрос обрабатывается...");
+                            }
+                        }, 10, 10, TimeUnit.SECONDS);
+
                         messageSender.sendMessage(chatId, messageText);
+
                         BankApi bankApi = bankApiProvider.getBankApi(lastSelectedBank.get(chatId));
-                        RateResponse response = nbrbController.getRateByCurName(
-                                lastSelectedCurrency.get(chatId),
-                                lastSelectedBank.get(chatId),
-                                bankApi);
-                        log.info("Получен ответ api банка в виде: " + response.toString());
-                        messageSender.sendExchangeRateCurrentDayMessage(chatId, response);
-                        messageSender.sendThanksToUserMessage(chatId, guest);
-                        log.info("Пользователь: " + guest + ", получил ответ!");
+                        try {
+                            RateResponse response = nbrbController.getRateByCurName(
+                                    lastSelectedCurrency.get(chatId),
+                                    lastSelectedBank.get(chatId),
+                                    bankApi);
+                            if (response != null) {
+                                stateResponse.put(chatId, StateResponse.RESPONSE_RECEIVED);
+                                log.info("Получен ответ api банка в виде: " + response.toString());
+                                messageSender.sendExchangeRateCurrentDayMessage(chatId, response);
+                                messageSender.sendThanksToUserMessage(chatId, guest);
+                                log.info("Пользователь: " + guest + ", получил ответ!");
+                                stateResponse.put(chatId, StateResponse.RESET);
+                            }
+                        }catch (Exception e){
+                            stateResponse.put(chatId,StateResponse.WAITING_FOR_RESPONSE);
+                            showBankOptions(chatId);
+                            chatStates.put(chatId, SELECT_BANK);
+                            executorService.shutdown();
+
+                        }
                     } else if (messageText.equals(BotConstants.ANOTHER_BANK)) {
                         chatStates.put(chatId, SELECT_BANK);
                         showBankOptions(chatId);
