@@ -61,11 +61,11 @@ public class MessageSender {
         strings.add(response.getBankName() + " - " + response.getCurrencyName() + " на " + response.getDate());
         strings.add("За " + response.getQuantityUnits() + " " + response.getCurrencyName());
         if(response.getRateBuy() != null) {
-            strings.add("Курс покупки - " + response.getRateBuy());
+            strings.add("Курс покупки - " + response.getRateBuy() + " " + BotConstants.BELARUSIAN_RUBLES);
         } else {
             strings.add("Курс покупки не предоставлен банком");
         }
-        strings.add("Курс продажи - " + response.getRateSale());
+        strings.add("Курс продажи - " + response.getRateSale() + " " + BotConstants.BELARUSIAN_RUBLES);
         strings.add("Выбранная валюта: " + response.getCurAbbreviation() + ". Выбранный банк: " + response.getBankName());
         for (String string: strings){
             sendMessage(chatId,string);
