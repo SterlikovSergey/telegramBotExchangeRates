@@ -13,4 +13,7 @@ public class BankApiProperties {
     private String urlAlfaBank;
     @Value("${bank.api.url.belarusBank}")
     private String urlBelarusBank;
+    @Value("${bank.api.url.openExchangeRates}")
+    private String urlOpenExchangeRates;
+
 }

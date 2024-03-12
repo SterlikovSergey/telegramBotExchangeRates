@@ -4,6 +4,7 @@ import by.st.telegrambotexchangerates.configuration.BankApiProperties;
 import by.st.telegrambotexchangerates.model.CurrencyRate;
 import by.st.telegrambotexchangerates.model.CurrencyRateBelarusBank;
 import by.st.telegrambotexchangerates.model.CurrencyRateNBRB;
+import by.st.telegrambotexchangerates.model.OpenExchangeRate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpMethod;
@@ -44,6 +45,11 @@ public class NationalBankApi implements BankApi {
 
     @Override
     public CurrencyRateBelarusBank getAllRates() {
+        return null;
+    }
+
+    @Override
+    public OpenExchangeRate getRatesByDate(String date) {
         return null;
     }
 }

@@ -2,14 +2,15 @@ package by.st.telegrambotexchangerates.component;
 
 import by.st.telegrambotexchangerates.configuration.BotConfig;
 import by.st.telegrambotexchangerates.constants.BotConstants;
-import by.st.telegrambotexchangerates.controller.NBRBController;
+import by.st.telegrambotexchangerates.controller.RestController;
 import by.st.telegrambotexchangerates.model.Guest;
 import by.st.telegrambotexchangerates.model.enums.StateChat;
+import by.st.telegrambotexchangerates.model.enums.StateIncomingValues;
 import by.st.telegrambotexchangerates.model.enums.StateResponse;
+import by.st.telegrambotexchangerates.model.response.OpenExchangeResponse;
 import by.st.telegrambotexchangerates.model.response.RateResponse;
 import by.st.telegrambotexchangerates.provider.BankApiProvider;
 import by.st.telegrambotexchangerates.service.BankApi;
-import by.st.telegrambotexchangerates.service.BelarusBankApi;
 import by.st.telegrambotexchangerates.service.KeyboardService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,8 +21,7 @@ import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -39,12 +39,14 @@ public class TelegramBot extends TelegramLongPollingBot {
     private final KeyboardService keyboardService;
     private final MessageSender messageSender;
     private final BotConfig botConfig;
-    private final NBRBController nbrbController;
+    private final RestController restController;
     private final BankApiProvider bankApiProvider;
     private final Map<Long, StateChat> chatStates = new HashMap<>();
     private final Map<Long, StateResponse> stateResponse = new HashMap<>();
+    private final Map<Long, StateIncomingValues> stateIncomingValues = new HashMap<>();
     private final Map<Long, String> lastSelectedBank = new HashMap<>();
-    private ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
+    private final Map<Long, String> dates = new HashMap<>();
+    private ScheduledExecutorService executorService = Executors.newScheduledThreadPool(10);
 
     private static Guest getGuest(Update update) {
         return Guest.builder()
@@ -75,20 +77,21 @@ public class TelegramBot extends TelegramLongPollingBot {
             StateChat stateChat = chatStates.getOrDefault(chatId, StateChat.SELECT_BANK);
             switch (stateChat) {
                 case SELECT_BANK:
-                    if (messageText.equals(BotConstants.START)) {
-                        chatStates.put(chatId, StateChat.SELECT_BANK);
-                        messageSender.startCommandReceived(chatId, guest, getBotUsername());
-                        showBankOptions(chatId);
-                        log.info("Пользователь: " + guest + ", запустил бот!");
-                    } else if (messageText.equals(BotConstants.ALFA_BANK) ||
-                            messageText.equals(BotConstants.BELARUS_BANK) ||
-                            messageText.equals(BotConstants.NATIONAL_BANK)) {
-                        chatStates.put(chatId, SELECT_CURRENCY);
-                        lastSelectedBank.put(chatId, messageText);
-                        showCurrencyOptions(chatId, messageText);
-                        log.info("Пользователь: " + guest + ", выбирает валюту!");
-                    } else {
-                        messageSender.sendHelpMessage(chatId);
+                    switch (messageText){
+                        case BotConstants.START -> {
+                            chatStates.put(chatId, StateChat.SELECT_BANK);
+                            messageSender.startCommandReceived(chatId, guest, getBotUsername());
+                            showBankOptions(chatId);
+                            log.info("Пользователь: " + guest + ", запустил бот!");
+                        }
+                        case BotConstants.ALFA_BANK,BotConstants.BELARUS_BANK,BotConstants.NATIONAL_BANK,
+                                BotConstants.OPEN_EXCHANGE_RATES -> {
+                            chatStates.put(chatId, SELECT_CURRENCY);
+                            lastSelectedBank.put(chatId, messageText);
+                            showCurrencyOptions(chatId, messageText);
+                            log.info("Пользователь: " + guest + ", выбирает валюту!");
+                        }
+                        default -> messageSender.sendHelpMessage(chatId);
                     }
                     break;
                 case SELECT_CURRENCY:
@@ -108,65 +111,104 @@ public class TelegramBot extends TelegramLongPollingBot {
                     }
                     break;
                 case SELECT_OPTION:
-                    if (messageText.equals(BotConstants.CURRENT_EXCHANGE_RATE)
-                            || messageText.equals(BotConstants.SELECTED_EXCHANGE_RATE) ||
-                            messageText.equals(BotConstants.SELECTED_STATISTICS)) {
-
-                        stateResponse.put(chatId, StateResponse.WAITING_FOR_RESPONSE);
-
-                        if (executorService.isShutdown()) {
-                            executorService = Executors.newSingleThreadScheduledExecutor();
-                        }
-                        long startTime = System.currentTimeMillis();
-
-                        executorService.scheduleAtFixedRate(() -> {
-                            if (System.currentTimeMillis() - startTime >= 31_000 &&
-                                    stateResponse.get(chatId) == StateResponse.WAITING_FOR_RESPONSE) {
-                                messageSender.sendMessage(chatId, "Сервис " + lastSelectedBank.get(chatId) +
-                                        " временно не доступен. Выберите другой банк!");
-                                executorService.shutdown();
+                    switch (messageText) {
+                        case BotConstants.CURRENT_EXCHANGE_RATE -> {
+                            stateResponse.put(chatId, StateResponse.WAITING_FOR_RESPONSE);
+                            if (executorService == null || executorService.isShutdown()) {
+                                executorService = Executors.newScheduledThreadPool(10);
+                            }
+                            long startTime = System.currentTimeMillis();
+                            handleResponse(startTime, chatId);
+                            messageSender.sendMessage(chatId, messageText);
+                            BankApi bankApi = bankApiProvider.getBankApi(lastSelectedBank.get(chatId));
+                            try {
+                                RateResponse response = restController.getRateByCurName(
+                                        lastSelectedCurrency.get(chatId),
+                                        lastSelectedBank.get(chatId),
+                                        bankApi);
+                                if (response != null) {
+                                    stateResponse.put(chatId, StateResponse.RESPONSE_RECEIVED);
+                                    log.info("Получен ответ api банка в виде: " + response.toString());
+                                    messageSender.sendExchangeRateCurrentDayMessage(chatId, response);
+                                    messageSender.sendThanksToUserMessage(chatId, guest);
+                                    log.info("Пользователь: " + guest + ", получил ответ!");
+                                    stateResponse.put(chatId, StateResponse.RESET);
+                                }
+                            } catch (Exception e) {
+                                stateResponse.put(chatId, StateResponse.WAITING_FOR_RESPONSE);
+                                showBankOptions(chatId);
                                 chatStates.put(chatId, SELECT_BANK);
-                            } else if (stateResponse.get(chatId) == StateResponse.RESPONSE_RECEIVED ||
-                                    stateResponse.get(chatId) == StateResponse.RESET) {
                                 executorService.shutdown();
-                            } else {
-                                messageSender.sendMessage(chatId, "Пожалуйста, подождите, ваш запрос обрабатывается...");
                             }
-                        }, 10, 10, TimeUnit.SECONDS);
+                        }
+                        case BotConstants.SELECTED_EXCHANGE_RATE -> {
 
-                        messageSender.sendMessage(chatId, messageText);
-
-                        BankApi bankApi = bankApiProvider.getBankApi(lastSelectedBank.get(chatId));
-                        try {
-                            RateResponse response = nbrbController.getRateByCurName(
-                                    lastSelectedCurrency.get(chatId),
-                                    lastSelectedBank.get(chatId),
-                                    bankApi);
-                            if (response != null) {
-                                stateResponse.put(chatId, StateResponse.RESPONSE_RECEIVED);
-                                log.info("Получен ответ api банка в виде: " + response.toString());
-                                messageSender.sendExchangeRateCurrentDayMessage(chatId, response);
-                                messageSender.sendThanksToUserMessage(chatId, guest);
-                                log.info("Пользователь: " + guest + ", получил ответ!");
-                                stateResponse.put(chatId, StateResponse.RESET);
+                            if (executorService == null || executorService.isShutdown()) {
+                                executorService = Executors.newScheduledThreadPool(10);
                             }
-                        }catch (Exception e){
-                            stateResponse.put(chatId,StateResponse.WAITING_FOR_RESPONSE);
+                            long startTime = System.currentTimeMillis();
+                            messageSender.sendMessage(chatId, messageText);
+                            if (stateIncomingValues.get(chatId) != StateIncomingValues.DATE_INPUT) {
+                                stateIncomingValues.put(chatId, StateIncomingValues.WAITING_FOR_DATE);
+                                messageSender.sendMessage(chatId, "Введите дату в формате гггг-мм-дд");
+                            }
+                            if (stateIncomingValues.get(chatId) == StateIncomingValues.WAITING_FOR_DATE) {
+                                dates.put(chatId, update.getMessage().getText());
+                                handleResponse(startTime, chatId);
+
+
+                                try {
+                                    OpenExchangeResponse response = restController.getRatesFromOpenExchBy(
+                                            dates.get(chatId),
+                                            lastSelectedBank.get(chatId),
+                                            bankApiProvider.getBankApi(lastSelectedBank.get(chatId)));
+                                    if (response != null) {
+                                        stateResponse.put(chatId, StateResponse.RESPONSE_RECEIVED);
+                                        log.info("Получен ответ api банка в виде: " + response.toString());
+                                        messageSender.sendExchangeRateSelectedDayMessage(chatId, response);
+                                        messageSender.sendThanksToUserMessage(chatId, guest);
+                                        log.info("Пользователь: " + guest + ", получил ответ!");
+                                        stateResponse.put(chatId, StateResponse.RESET);
+                                    }
+                                } catch (Exception e) {
+                                    stateResponse.put(chatId, StateResponse.WAITING_FOR_RESPONSE);
+                                    showBankOptions(chatId);
+                                    chatStates.put(chatId, SELECT_BANK);
+                                    executorService.shutdown();
+                                }
+                            }
+                        }
+                        case BotConstants.ANOTHER_BANK -> {
                             showBankOptions(chatId);
                             chatStates.put(chatId, SELECT_BANK);
-                            executorService.shutdown();
-
+                            log.info("Пользователь: " + guest + ", меняет выбранный банк!");
                         }
-                    } else if (messageText.equals(BotConstants.ANOTHER_BANK)) {
-                        chatStates.put(chatId, SELECT_BANK);
-                        showBankOptions(chatId);
-                    } else {
-                        chatStates.put(chatId, StateChat.SELECT_CURRENCY);
-                        showCurrencyOptions(chatId, lastSelectedBank.get(chatId));
+                        case BotConstants.ANOTHER_CURRENCY -> {
+                            chatStates.put(chatId, StateChat.SELECT_CURRENCY);
+                            showCurrencyOptions(chatId, lastSelectedBank.get(chatId));
+                        }
+                        default -> messageSender.sendHelpMessage(chatId);
                     }
                     break;
             }
         }
+    }
+
+    private void handleResponse(Long startTime, Long chatId) {
+        executorService.scheduleAtFixedRate(() -> {
+            if (System.currentTimeMillis() - startTime >= 31_000 &&
+                    stateResponse.get(chatId) == StateResponse.WAITING_FOR_RESPONSE) {
+                messageSender.sendMessage(chatId, "Сервис " + lastSelectedBank.get(chatId) +
+                        " временно не доступен. Выберите другой банк!");
+                executorService.shutdown();
+                chatStates.put(chatId, SELECT_BANK);
+            } else if (stateResponse.get(chatId) == StateResponse.RESPONSE_RECEIVED ||
+                    stateResponse.get(chatId) == StateResponse.RESET) {
+                executorService.shutdown();
+            } else {
+                messageSender.sendMessage(chatId, "Пожалуйста, подождите, ваш запрос обрабатывается...");
+            }
+        }, 10, 10, TimeUnit.SECONDS);
     }
 
     private void showBankOptions(long chatId) {

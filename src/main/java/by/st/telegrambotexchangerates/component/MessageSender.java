@@ -1,6 +1,8 @@
 package by.st.telegrambotexchangerates.component;
 
+import by.st.telegrambotexchangerates.constants.BotConstants;
 import by.st.telegrambotexchangerates.model.Guest;
+import by.st.telegrambotexchangerates.model.response.OpenExchangeResponse;
 import by.st.telegrambotexchangerates.model.response.RateResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,10 +43,28 @@ public class MessageSender {
         }
     }
 
+    public void sendExchangeRateSelectedDayMessage(long chatId, OpenExchangeResponse response){
+        List<String> strings = new ArrayList<>();
+        strings.add(response.getBankName() + " сервис ");
+        strings.add("Стоимость " + response.getCurAbbreviation() + " на " + response.getDate() + " состовляет: ");
+        strings.add(response.getRateSaleBYN() + " " + BotConstants.BELARUSIAN_RUBLES);
+        strings.add(response.getRateSaleRUB() + " " + BotConstants.RUSSIAN_RUBLES);
+        strings.add(response.getRateSaleCNY() + " " + BotConstants.CHINESE_YUAN);
+        strings.add(response.getRateSaleEUR() + " " + BotConstants.EUR);
+        for (String string: strings){
+            sendMessage(chatId,string);
+        }
+    }
+
     public void sendExchangeRateCurrentDayMessage(long chatId,RateResponse response){
         List<String> strings = new ArrayList<>();
         strings.add(response.getBankName() + " - " + response.getCurrencyName() + " на " + response.getDate());
-        strings.add("Курс покупки - " + response.getRateBuy());
+        strings.add("За " + response.getQuantityUnits() + " " + response.getCurrencyName());
+        if(response.getRateBuy() != null) {
+            strings.add("Курс покупки - " + response.getRateBuy());
+        } else {
+            strings.add("Курс покупки не предоставлен банком");
+        }
         strings.add("Курс продажи - " + response.getRateSale());
         strings.add("Выбранная валюта: " + response.getCurAbbreviation() + ". Выбранный банк: " + response.getBankName());
         for (String string: strings){

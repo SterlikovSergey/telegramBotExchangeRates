@@ -54,4 +54,9 @@ public class AlfaBankApi implements BankApi {
     public CurrencyRateBelarusBank getAllRates() {
         return null;
     }
+
+    @Override
+    public OpenExchangeRate getRatesByDate(String date) {
+        return null;
+    }
 }

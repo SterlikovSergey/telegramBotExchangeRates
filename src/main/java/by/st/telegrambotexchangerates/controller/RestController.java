@@ -2,18 +2,17 @@ package by.st.telegrambotexchangerates.controller;
 
 import by.st.telegrambotexchangerates.constants.BotConstants;
 import by.st.telegrambotexchangerates.model.CurrencyRateBelarusBank;
+import by.st.telegrambotexchangerates.model.OpenExchangeRate;
+import by.st.telegrambotexchangerates.model.response.OpenExchangeResponse;
 import by.st.telegrambotexchangerates.model.response.RateResponse;
-import by.st.telegrambotexchangerates.service.AlfaBankApi;
-import by.st.telegrambotexchangerates.service.BankApi;
-import by.st.telegrambotexchangerates.service.BelarusBankApi;
-import by.st.telegrambotexchangerates.service.NationalBankApi;
+import by.st.telegrambotexchangerates.service.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 
 
 @Controller
 @RequiredArgsConstructor
-public class NBRBController {
+public class RestController {
     public RateResponse getRateByCurName(String curAbbreviation, String bankName, BankApi bankApi) {
         if (bankApi instanceof AlfaBankApi || bankApi instanceof NationalBankApi) {
             return bankApi.getCurrencyRate(curAbbreviation)
@@ -23,6 +22,7 @@ public class NBRBController {
                         response.setCurAbbreviation(rate.getCurAbbreviation());
                         response.setRateSale(rate.getCurOfficialRateSale());
                         response.setRateBuy(response.getRateBuy());
+                        response.setQuantityUnits(rate.getQuantityUnits());
                         response.setDate(rate.getFormattedDate());
                         response.setCurrencyName(rate.getCurName());
                         return response;
@@ -35,6 +35,8 @@ public class NBRBController {
                         .bankName(bankName)
                         .date(currencyRateBelarusBank.getFormattedDate())
                         .curAbbreviation(curAbbreviation)
+                        .currencyName(BotConstants.U_S_DOLLAR)
+                        .quantityUnits(1)
                         .rateSale(currencyRateBelarusBank.getUsdSale())
                         .rateBuy(currencyRateBelarusBank.getUsdBuy())
                         .build();
@@ -42,6 +44,8 @@ public class NBRBController {
                         .bankName(bankName)
                         .date(currencyRateBelarusBank.getFormattedDate())
                         .curAbbreviation(curAbbreviation)
+                        .currencyName(BotConstants.EURO)
+                        .quantityUnits(1)
                         .rateSale(currencyRateBelarusBank.getEurSale())
                         .rateBuy(currencyRateBelarusBank.getEurBuy())
                         .build();
@@ -49,6 +53,8 @@ public class NBRBController {
                         .bankName(bankName)
                         .date(currencyRateBelarusBank.getFormattedDate())
                         .curAbbreviation(curAbbreviation)
+                        .currencyName(BotConstants.CHINESE_YUAN)
+                        .quantityUnits(10)
                         .rateSale(currencyRateBelarusBank.getCnySale())
                         .rateBuy(currencyRateBelarusBank.getChyBuy())
                         .build();
@@ -56,6 +62,8 @@ public class NBRBController {
                         .bankName(bankName)
                         .date(currencyRateBelarusBank.getFormattedDate())
                         .curAbbreviation(curAbbreviation)
+                        .currencyName(BotConstants.RUSSIAN_RUBLES)
+                        .quantityUnits(100)
                         .rateSale(currencyRateBelarusBank.getRubSale())
                         .rateBuy(currencyRateBelarusBank.getRubBuy())
                         .build();
@@ -64,6 +72,18 @@ public class NBRBController {
         } else {
             throw new IllegalArgumentException("Неизвестный API банка: " + bankApi.getClass().getSimpleName());
         }
+    }
+    public OpenExchangeResponse getRatesFromOpenExchBy(String date, String bankName, BankApi bankApi){
+            OpenExchangeRate openExchangeRate = bankApi.getRatesByDate(date);
+            return OpenExchangeResponse.builder()
+                    .bankName(bankName)
+                    .curAbbreviation(BotConstants.U_S_DOLLAR)
+                    .date(date)
+                    .rateSaleEUR(openExchangeRate.getRate().getCostEUR())
+                    .rateSaleCNY(openExchangeRate.getRate().getCostCNY())
+                    .rateSaleRUB(openExchangeRate.getRate().getCostRUB())
+                    .rateSaleBYN(openExchangeRate.getRate().getCostBYN())
+                    .build();
     }
 }
 

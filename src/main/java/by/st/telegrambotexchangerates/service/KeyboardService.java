@@ -14,7 +14,7 @@ import java.util.List;
 public class KeyboardService {
     public ReplyKeyboardMarkup getBanksKeyboard() {
         List<String> banks = Arrays.asList(BotConstants.ALFA_BANK, BotConstants.BELARUS_BANK,
-                BotConstants.NATIONAL_BANK);
+                BotConstants.NATIONAL_BANK,BotConstants.OPEN_EXCHANGE_RATES);
         List<KeyboardRow> keyboardRows = new ArrayList<>();
         Iterator<String> bankIterator = banks.iterator();
         if (bankIterator.hasNext()) {
